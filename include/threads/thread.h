@@ -91,6 +91,16 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+	int64_t wakeup_ticks;
+	int nice;
+	int recent_cpu;
+
+	int original_priority; // 스레드의 원래 우선순위를 저장해놓는다. 우선순위를 기부받고 다시 본인의 우선 순위로 돌아오기 위함.
+	struct lock *wait_on_lock; // 스레드가 현재 얻기 위해 기다리고 있는 Lock
+	struct list donations; // 자신에게 priority를 나누어준 스레드들의 리스트
+	struct list_elem donation_elem; // 이 리스트를 관리하기 위한 element로 thread 구조체의 그냥 elem과 구분하여 사용.
+
+
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -142,5 +152,13 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+void thread_sleep(int64_t ticks);
+bool cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void thread_wakeup(int64_t global_ticks);
+void preempt_priority(void);
+void donate_priority(void);
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
 
 #endif /* threads/thread.h */
