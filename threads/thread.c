@@ -19,7 +19,8 @@
 #define F (1 << 14)
 //  정수와 실수 간 변환
 #define ItoF(INT) (INT * F)
-#define FtoI(FLOAT) ((FLOAT >= 0) ? ((FLOAT + F / 2) / F) : ((FLOAT - F / 2) / F))
+// #define FtoI(FLOAT) ((FLOAT >= 0) ? ((FLOAT + F / 2) / F) : ((FLOAT - F / 2) / F))
+#define FtoI(FLOAT) (FLOAT / F)
 //  실수 포함 사칙연산
 //  (실수 정수의 나눗셈, 곱셈 / 실수끼리의 덧셈, 뺄셈은 걍 하면 됨)
 #define PLUSFnI(x, n) (x + n * F)
@@ -75,8 +76,9 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 static struct list sleep_list;
+static struct list all_list;
 
-int load_avg;
+static int64_t load_avg = 0;
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -125,6 +127,7 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 	list_init (&sleep_list);
+	list_init (&all_list);
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -226,6 +229,8 @@ thread_create (const char *name, int priority,
 	thread_unblock (t);
 	preempt_priority();
 
+	list_push_back(&all_list, &t->alllist_elem);
+
 	return tid;
 }
 
@@ -308,6 +313,7 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
+	list_remove(&thread_current() -> alllist_elem);
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -347,30 +353,34 @@ thread_get_priority (void) {
 void
 thread_set_nice (int nice UNUSED) {
 	/* TODO: Your implementation goes here */
+	thread_current() -> nice = nice;
+
+	mlfqs_calculate_priority(thread_current());
+
+	// refresh_priority();
+	// preempt_priority();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	return thread_current() -> nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
-	/* TODO: Your implementation goes here */
-	enum intr_level old_level = intr_disable();
-	int load_avg_val = 
-	return 0;
+	return FtoI(load_avg * 100);;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
-int
-thread_get_recent_cpu (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
-}
+// int
+// thread_get_recent_cpu (void) {
+// 	/* TODO: Your implementation goes here */
+
+// 	return 0;
+// }
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -791,8 +801,57 @@ void refresh_priority(void)
 // 어떤 스레드에 대해서든 우선순위를 구하는 함수.
 void mlfqs_calculate_priority(struct thread *t)
 {
+	
 	if(t == idle_thread)
 		return;
-	t->priority = FtoI(PLUSFnI(t->recent_cpu / -4, PRI_MAX - t->nice * 2));
+	t->priority = PRI_MAX - FtoI(t->recent_cpu/4) - (t->nice * 2);
 }
 
+//
+int thread_get_recent_cpu(void)
+{
+	struct thread *curr = thread_current();
+	// 현재 스레드의 recent_cpu value에 100을 곱한 값을 반환하며, 이에 가장 가까운 정수로 변환하여 반환한다.
+	return FtoI(curr->recent_cpu * 100);
+}
+
+// recent_cpu를 재계산하는 함수.
+// 이 함수는 1초마다 timer interrupt에 의해 호출되어야 함.
+int refresh_recentCPU(void)
+{
+	struct thread *curr = thread_current();
+	// recentCpu = (2 * loadAvg)/(2 * loadAvg+1) * recentCpu+nice	
+	curr -> recent_cpu = PLUSFnI(MULTFnF(DIVIDEFnF(2*load_avg,PLUSFnI(2*load_avg,1)),curr -> recent_cpu), curr -> nice);
+}
+
+void calculate_load_avg(void)
+{	
+	
+	size_t ready_threads = list_size(&ready_list);
+	if (thread_current() != idle_thread)
+		ready_threads += 1; // 여기까지 성희가 도와줌
+	load_avg = MULTFnF(DIVIDEFnF(ItoF(59),ItoF(60)),load_avg) + (DIVIDEFnF(ItoF(1),ItoF(60)) * ready_threads);
+	// printf("load_avg cal : %d\n", load_avg);
+	return;
+}
+
+// 모든 스레드에 대해서 mlfqs_calculate_priority를 호출한다.
+void check_all_thread_priority(void)
+{
+	struct list_elem * e;
+	
+	for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, alllist_elem);
+		mlfqs_calculate_priority(t);
+	}
+}
+
+void rf_recent_cpu(void)
+{
+	struct thread *curr = thread_current();
+	if(curr != idle_thread)
+	{
+		curr -> recent_cpu = PLUSFnI(curr->recent_cpu,1);
+	}
+}

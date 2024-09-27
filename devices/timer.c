@@ -17,6 +17,15 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
+
+
+extern int64_t load_avg;
+extern struct list ready_list;
+// extern struct thread *idle_thread;
+
+#define F (1 << 14)
+#define PLUSFnI(x, n) (x + n * F)
+
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
@@ -126,7 +135,24 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 	thread_wakeup(ticks);
+	if(thread_mlfqs)
+	{
+		rf_recent_cpu();
+	
+		if(ticks % 4 == 0)
+		{
+			check_all_thread_priority();
+
+			if(ticks % 100 == 0)
+			{
+				calculate_load_avg();
+				refresh_recentCPU(); 
+			}
+		}
+	}
+
 }
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

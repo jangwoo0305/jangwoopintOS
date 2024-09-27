@@ -99,6 +99,7 @@ struct thread {
 	struct lock *wait_on_lock; // 스레드가 현재 얻기 위해 기다리고 있는 Lock
 	struct list donations; // 자신에게 priority를 나누어준 스레드들의 리스트
 	struct list_elem donation_elem; // 이 리스트를 관리하기 위한 element로 thread 구조체의 그냥 elem과 구분하여 사용.
+	struct list_elem alllist_elem; // 모든 스레드에 대해서 우선순위를 재계산하는 mlfqs_calculate_priority이 함수를 호출하기 위한 리스트를 만들기 위해 사용. 
 
 
 
@@ -160,5 +161,11 @@ void donate_priority(void);
 bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void remove_with_lock(struct lock *lock);
 void refresh_priority(void);
+void mlfqs_calculate_priority(struct thread *t);
+int thread_get_recent_cpu(void);
+int refresh_recentCPU(void);
+void calculate_load_avg(void);
+void rf_recent_cpu(void);
+
 
 #endif /* threads/thread.h */
