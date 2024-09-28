@@ -134,10 +134,10 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
-	thread_wakeup(ticks);
+
 	if(thread_mlfqs)
 	{
-		rf_recent_cpu();
+		increment_recent_cpu();
 	
 		if(ticks % 4 == 0)
 		{
@@ -145,11 +145,13 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 
 			if(ticks % 100 == 0)
 			{
-				calculate_load_avg();
-				refresh_recentCPU(); 
+				recalculate_recent_cpu();
+				calculate_load_avg(); 
 			}
 		}
 	}
+
+	thread_wakeup(ticks);
 
 }
 

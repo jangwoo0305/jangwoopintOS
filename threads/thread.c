@@ -313,7 +313,7 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
-	list_remove(&thread_current() -> alllist_elem);
+	// list_remove(&thread_current() -> alllist_elem);
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -337,10 +337,15 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	
+	if(thread_mlfqs)
+		return;
+		
 	thread_current ()->original_priority = new_priority;
 
 	refresh_priority();
 	preempt_priority();
+	
 }
 
 /* Returns the current thread's priority. */
@@ -350,18 +355,20 @@ thread_get_priority (void) {
 }
 
 /* Sets the current thread's nice value to NICE. */
+// 현재 스레드의 nice값을 새로운 nice의 값으로 바꾸고 그 nice값을 바탕으로 스레드의 우선 순위를 새로 재계산한다.
+// 만약 실행중인 스레드의 우선 순위가 더 이상 더 높은 순위의 우선순위가 아니라면 양보한다.
 void
 thread_set_nice (int nice UNUSED) {
 	/* TODO: Your implementation goes here */
 	thread_current() -> nice = nice;
-
 	mlfqs_calculate_priority(thread_current());
+	preempt_priority();
 
 	// refresh_priority();
-	// preempt_priority();
 }
 
 /* Returns the current thread's nice value. */
+// 현재 스레드의 nice의 값을 반환한다.
 int
 thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
@@ -369,15 +376,23 @@ thread_get_nice (void) {
 }
 
 /* Returns 100 times the system load average. */
+
 int
 thread_get_load_avg (void) {
-	return FtoI(load_avg * 100);;
+	return FtoI(load_avg * 100);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 // int
 // thread_get_recent_cpu (void) {
 // 	/* TODO: Your implementation goes here */
+int thread_get_recent_cpu(void)
+{
+
+	struct thread *curr = thread_current();
+	// 현재 스레드의 recent_cpu value에 100을 곱한 값을 반환하며, 이에 가장 가까운 정수로 변환하여 반환한다.
+	return FtoI(curr->recent_cpu * 100);
+}
 
 // 	return 0;
 // }
@@ -806,20 +821,15 @@ void mlfqs_calculate_priority(struct thread *t)
 		return;
 	t->priority = PRI_MAX - FtoI(t->recent_cpu/4) - (t->nice * 2);
 }
-
-//
-int thread_get_recent_cpu(void)
-{
-	struct thread *curr = thread_current();
-	// 현재 스레드의 recent_cpu value에 100을 곱한 값을 반환하며, 이에 가장 가까운 정수로 변환하여 반환한다.
-	return FtoI(curr->recent_cpu * 100);
-}
-
 // recent_cpu를 재계산하는 함수.
 // 이 함수는 1초마다 timer interrupt에 의해 호출되어야 함.
 int refresh_recentCPU(void)
 {
+	
 	struct thread *curr = thread_current();
+
+	if(curr == idle_thread)
+		return;
 	// recentCpu = (2 * loadAvg)/(2 * loadAvg+1) * recentCpu+nice	
 	curr -> recent_cpu = PLUSFnI(MULTFnF(DIVIDEFnF(2*load_avg,PLUSFnI(2*load_avg,1)),curr -> recent_cpu), curr -> nice);
 }
@@ -830,9 +840,31 @@ void calculate_load_avg(void)
 	size_t ready_threads = list_size(&ready_list);
 	if (thread_current() != idle_thread)
 		ready_threads += 1; // 여기까지 성희가 도와줌
+	
+	printf("load-avg : %d",load_avg);
 	load_avg = MULTFnF(DIVIDEFnF(ItoF(59),ItoF(60)),load_avg) + (DIVIDEFnF(ItoF(1),ItoF(60)) * ready_threads);
 	// printf("load_avg cal : %d\n", load_avg);
 	return;
+}
+
+void increment_recent_cpu(void)
+{
+	struct thread *curr = thread_current();
+	if(curr != idle_thread)
+	{
+		curr -> recent_cpu = PLUSFnI(curr->recent_cpu,1);
+	}
+}
+
+void recalculate_recent_cpu(void)
+{
+	struct list_elem *e;
+
+	for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, alllist_elem);
+		refresh_recentCPU();
+	}
 }
 
 // 모든 스레드에 대해서 mlfqs_calculate_priority를 호출한다.
@@ -844,14 +876,5 @@ void check_all_thread_priority(void)
 	{
 		struct thread *t = list_entry(e, struct thread, alllist_elem);
 		mlfqs_calculate_priority(t);
-	}
-}
-
-void rf_recent_cpu(void)
-{
-	struct thread *curr = thread_current();
-	if(curr != idle_thread)
-	{
-		curr -> recent_cpu = PLUSFnI(curr->recent_cpu,1);
 	}
 }
