@@ -145,7 +145,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 
 			if(ticks % 100 == 0)
 			{
-				recalculate_recent_cpu();
+				refresh_recentCPU();
 				calculate_load_avg(); 
 			}
 		}

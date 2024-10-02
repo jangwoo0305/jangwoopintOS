@@ -163,10 +163,10 @@ void remove_with_lock(struct lock *lock);
 void refresh_priority(void);
 void mlfqs_calculate_priority(struct thread *t);
 int thread_get_recent_cpu(void);
-int refresh_recentCPU(void);
+void refresh_recentCPU(void);
 void calculate_load_avg(void);
 void increment_recent_cpu(void);
 void recalculate_recent_cpu(void);
-
+void check_all_thread_priority(void);
 
 #endif /* threads/thread.h */

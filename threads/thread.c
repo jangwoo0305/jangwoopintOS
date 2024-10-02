@@ -151,7 +151,7 @@ thread_start (void) {
 	/* Wait for the idle thread to initialize idle_thread. */
 	sema_down (&idle_started);
 
-	load_avg = 0;
+	// load_avg = 0;
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -225,11 +225,13 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	// list_push_back(&all_list, &t->alllist_elem);
+
 	/* Add to run queue. */
 	thread_unblock (t);
 	preempt_priority();
 
-	list_push_back(&all_list, &t->alllist_elem);
+	// list_push_back(&all_list, &t->alllist_elem);
 
 	return tid;
 }
@@ -312,8 +314,9 @@ thread_exit (void) {
 
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
+	
+	list_remove(&thread_current() -> alllist_elem);
 	intr_disable ();
-	// list_remove(&thread_current() -> alllist_elem);
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -340,7 +343,7 @@ thread_set_priority (int new_priority) {
 	
 	if(thread_mlfqs)
 		return;
-		
+
 	thread_current ()->original_priority = new_priority;
 
 	refresh_priority();
@@ -373,6 +376,8 @@ int
 thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
 	return thread_current() -> nice;
+	// int nice_val = thread_current()->nice;
+	// return nice_val;
 }
 
 /* Returns 100 times the system load average. */
@@ -464,6 +469,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init (&t -> donations);
 	t->nice = 0 ;
 	t->recent_cpu = 0 ;
+
+	list_push_back(&all_list, &t->alllist_elem);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -817,21 +824,27 @@ void refresh_priority(void)
 void mlfqs_calculate_priority(struct thread *t)
 {
 	
-	if(t == idle_thread)
-		return;
+	// if(t == idle_thread)
+	// 	return;
 	t->priority = PRI_MAX - FtoI(t->recent_cpu/4) - (t->nice * 2);
 }
 // recent_cpu를 재계산하는 함수.
 // 이 함수는 1초마다 timer interrupt에 의해 호출되어야 함.
-int refresh_recentCPU(void)
+void refresh_recentCPU(void)
 {
-	
-	struct thread *curr = thread_current();
+	struct list_elem *e;
 
-	if(curr == idle_thread)
-		return;
-	// recentCpu = (2 * loadAvg)/(2 * loadAvg+1) * recentCpu+nice	
-	curr -> recent_cpu = PLUSFnI(MULTFnF(DIVIDEFnF(2*load_avg,PLUSFnI(2*load_avg,1)),curr -> recent_cpu), curr -> nice);
+	for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, alllist_elem);
+		// recentCpu = (2 * loadAvg)/(2 * loadAvg+1) * recentCpu+nice	 
+		t -> recent_cpu = PLUSFnI(MULTFnF(DIVIDEFnF(2*load_avg,PLUSFnI(2*load_avg,1)), t -> recent_cpu), t -> nice);
+	}
+	
+	// struct thread *curr = thread_current();
+
+	// if(curr == idle_thread)
+	// 	return;
 }
 
 void calculate_load_avg(void)
@@ -841,12 +854,13 @@ void calculate_load_avg(void)
 	if (thread_current() != idle_thread)
 		ready_threads += 1; // 여기까지 성희가 도와줌
 	
-	printf("load-avg : %d",load_avg);
+	// printf("load-avg : %d\n",load_avg);
 	load_avg = MULTFnF(DIVIDEFnF(ItoF(59),ItoF(60)),load_avg) + (DIVIDEFnF(ItoF(1),ItoF(60)) * ready_threads);
 	// printf("load_avg cal : %d\n", load_avg);
 	return;
 }
 
+// recent_cpu값 1증가.
 void increment_recent_cpu(void)
 {
 	struct thread *curr = thread_current();
@@ -856,6 +870,7 @@ void increment_recent_cpu(void)
 	}
 }
 
+// 모든 스레드의 recent_cpu값 재계산
 void recalculate_recent_cpu(void)
 {
 	struct list_elem *e;
@@ -864,11 +879,12 @@ void recalculate_recent_cpu(void)
 	{
 		struct thread *t = list_entry(e, struct thread, alllist_elem);
 		refresh_recentCPU();
-	}
+	}    
 }
 
 // 모든 스레드에 대해서 mlfqs_calculate_priority를 호출한다.
-void check_all_thread_priority(void)
+// 모든 스레드의 priority값 재계산.
+void check_all_thread_priority(void) 
 {
 	struct list_elem * e;
 	
